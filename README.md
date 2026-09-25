@@ -46,6 +46,26 @@ ctest --test-dir build -C Release --output-on-failure
 
 Each run prints completed, timed-out, and cancelled counts together with elapsed time, mean queue wait, and p95 queue wait. The event CSV preserves submitted, runnable, dispatched, completed, timed-out, recovered, and cancelled transitions for inspection.
 
+## Reproduce the policy benchmark
+
+The benchmark runs 400 deterministic jobs across eight contexts and four priority levels. Each context has a dependency chain, so a policy can favor a context without making all of its future work runnable at once.
+
+```powershell
+./build/Release/policy-benchmark.exe
+```
+
+It reports overall mean/p95 queue wait together with the mean and maximum wait for the two lowest-priority contexts. Values are abstract ticks used to compare policies within this model; they are not hardware timings or claims about a commercial GPU.
+
+### Recorded results
+
+| Policy | Jobs | Elapsed ticks | Mean wait | P95 wait | Low-priority maximum wait |
+|---|---:|---:|---:|---:|---:|
+| FIFO | 400 | 1,800 | 31.17 | 41 | 37 |
+| Strict priority | 400 | 1,800 | 17.98 | 8 | 1,351 |
+| Weighted round robin | 400 | 1,800 | 24.41 | 86 | 92 |
+
+All policies completed the same work in 1,800 ticks because the model has one non-preemptive engine. Strict priority reduced mean wait but delayed one low-priority job for most of the run. Weighted round robin reduced mean wait by 22% versus FIFO and reduced the worst low-priority wait by 93% versus strict priority. The strict-priority P95 also shows why one aggregate percentile can hide starvation outliers.
+
 ## Workload format
 
 ```text

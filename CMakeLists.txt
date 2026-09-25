@@ -17,6 +17,9 @@ endif()
 add_executable(gpu-scheduler src/main.cpp)
 target_link_libraries(gpu-scheduler PRIVATE scheduler)
 
+add_executable(policy-benchmark benchmarks/policy_benchmark.cpp)
+target_link_libraries(policy-benchmark PRIVATE scheduler)
+
 enable_testing()
 add_executable(scheduler-tests tests/scheduler_tests.cpp)
 target_link_libraries(scheduler-tests PRIVATE scheduler)
