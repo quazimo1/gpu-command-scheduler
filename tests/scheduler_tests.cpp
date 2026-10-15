@@ -71,6 +71,15 @@ void timeout_cancels_dependents_and_recovers() {
          "timeout accounting");
   expect(jobs_for(result.events, "recovered") == std::vector<int>({1}),
          "engine recovery event");
+
+  const std::vector<Job> reversed_chain{{3, 0, 1, 1, 10, false, {2}},
+                                        {2, 0, 1, 1, 10, false, {1}},
+                                        {1, 0, 1, 10, 3, true, {}}};
+  const auto chain_result = Simulator(Policy::fifo).run(reversed_chain);
+  expect(chain_result.timed_out == 1 && chain_result.cancelled == 2,
+         "transitive timeout cancellation");
+  expect(jobs_for(chain_result.events, "recovered") == std::vector<int>({1}),
+         "transitive timeout recovery event");
 }
 
 void cycles_are_rejected() {

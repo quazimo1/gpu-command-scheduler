@@ -154,28 +154,34 @@ RunResult Simulator::run(const std::vector<Job>& jobs) {
   while (std::any_of(runtime.begin(), runtime.end(), [](const auto& item) {
     return !terminal(item.state);
   })) {
-    for (auto& item : runtime) {
-      if (item.state != State::waiting) continue;
-      bool failed_dependency = false;
-      bool all_complete = true;
-      for (int dependency : item.job.dependencies) {
-        const State state = states.at(dependency);
-        failed_dependency |= state == State::timed_out || state == State::cancelled;
-        all_complete &= state == State::completed;
+    bool state_changed;
+    do {
+      state_changed = false;
+      for (auto& item : runtime) {
+        if (item.state != State::waiting) continue;
+        bool failed_dependency = false;
+        bool all_complete = true;
+        for (int dependency : item.job.dependencies) {
+          const State state = states.at(dependency);
+          failed_dependency |= state == State::timed_out || state == State::cancelled;
+          all_complete &= state == State::completed;
+        }
+        if (failed_dependency) {
+          item.state = State::cancelled;
+          states[item.job.id] = item.state;
+          ++result.cancelled;
+          result.events.push_back(
+              {now, "cancelled", item.job.id, item.job.context, "dependency failed"});
+          state_changed = true;
+        } else if (all_complete) {
+          item.state = State::runnable;
+          states[item.job.id] = item.state;
+          ready_at[item.job.id] = now;
+          result.events.push_back({now, "runnable", item.job.id, item.job.context, ""});
+          state_changed = true;
+        }
       }
-      if (failed_dependency) {
-        item.state = State::cancelled;
-        states[item.job.id] = item.state;
-        ++result.cancelled;
-        result.events.push_back(
-            {now, "cancelled", item.job.id, item.job.context, "dependency failed"});
-      } else if (all_complete) {
-        item.state = State::runnable;
-        states[item.job.id] = item.state;
-        ready_at[item.job.id] = now;
-        result.events.push_back({now, "runnable", item.job.id, item.job.context, ""});
-      }
-    }
+    } while (state_changed);
 
     RuntimeJob* selected = choose();
     if (selected == nullptr) {
