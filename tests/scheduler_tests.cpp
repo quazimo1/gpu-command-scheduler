@@ -1,6 +1,8 @@
 #include "scheduler.hpp"
 
 #include <algorithm>
+#include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <random>
 #include <stdexcept>
@@ -11,6 +13,7 @@ using gpu_scheduler::Event;
 using gpu_scheduler::Job;
 using gpu_scheduler::Policy;
 using gpu_scheduler::Simulator;
+using gpu_scheduler::load_workload;
 
 namespace {
 
@@ -82,7 +85,7 @@ void timeout_cancels_dependents_and_recovers() {
          "transitive timeout recovery event");
 }
 
-void cycles_are_rejected() {
+void invalid_workloads_are_rejected() {
   const std::vector<Job> jobs{{1, 0, 1, 1, 10, false, {2}},
                               {2, 0, 1, 1, 10, false, {1}}};
   try {
@@ -90,6 +93,26 @@ void cycles_are_rejected() {
     throw std::runtime_error("cycle was accepted");
   } catch (const std::invalid_argument&) {
   }
+
+  const std::string path = "scheduler-invalid-workload-test.csv";
+  const std::string header = "id,context,priority,duration,timeout,hang,dependencies\n";
+  for (const auto& contents : {
+           std::string("1,0,1,1,10,false,\n"),
+           header + "1,0,1,-1,10,false,\n",
+           header + "1,0,1,1,10,ture,\n",
+           header + "1junk,0,1,1,10,false,\n",
+           header + "1,0,1,1,10,false,2junk\n",
+       }) {
+    std::ofstream output(path);
+    output << contents;
+    output.close();
+    try {
+      load_workload(path);
+      throw std::runtime_error("invalid CSV workload was accepted");
+    } catch (const std::invalid_argument&) {
+    }
+  }
+  std::remove(path.c_str());
 }
 
 void deterministic_stress_reaches_a_terminal_state() {
@@ -119,7 +142,7 @@ int main() {
     priority_selects_highest_first();
     weighted_round_robin_services_contexts();
     timeout_cancels_dependents_and_recovers();
-    cycles_are_rejected();
+    invalid_workloads_are_rejected();
     deterministic_stress_reaches_a_terminal_state();
     std::cout << "all scheduler tests passed\n";
     return 0;

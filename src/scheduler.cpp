@@ -1,11 +1,13 @@
 #include "scheduler.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <fstream>
 #include <map>
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <system_error>
 #include <unordered_map>
 
 namespace gpu_scheduler {
@@ -28,6 +30,16 @@ std::vector<std::string> split(const std::string& text, char delimiter) {
   }
   if (!text.empty() && text.back() == delimiter) parts.emplace_back();
   return parts;
+}
+
+template <typename T>
+T parse_number(const std::string& text, const char* field) {
+  T value{};
+  const char* end = text.data() + text.size();
+  const auto [next, error] = std::from_chars(text.data(), end, value);
+  if (error != std::errc{} || next != end)
+    throw std::invalid_argument("invalid " + std::string(field) + ": " + text);
+  return value;
 }
 
 void validate(const std::vector<Job>& jobs) {
@@ -243,21 +255,28 @@ std::vector<Job> load_workload(const std::string& path) {
   if (!input) throw std::runtime_error("cannot open workload: " + path);
   std::vector<Job> jobs;
   std::string line;
-  std::getline(input, line);  // header
+  if (!std::getline(input, line)) throw std::invalid_argument("missing CSV header");
+  if (!line.empty() && line.back() == '\r') line.pop_back();
+  if (line != "id,context,priority,duration,timeout,hang,dependencies")
+    throw std::invalid_argument("invalid CSV header");
   while (std::getline(input, line)) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
     if (line.empty() || line[0] == '#') continue;
     const auto fields = split(line, ',');
     if (fields.size() != 7) throw std::invalid_argument("expected 7 CSV fields: " + line);
     Job job;
-    job.id = std::stoi(fields[0]);
-    job.context = std::stoi(fields[1]);
-    job.priority = std::stoi(fields[2]);
-    job.duration = std::stoull(fields[3]);
-    job.timeout = std::stoull(fields[4]);
-    job.hangs = fields[5] == "1" || fields[5] == "true";
+    job.id = parse_number<int>(fields[0], "id");
+    job.context = parse_number<int>(fields[1], "context");
+    job.priority = parse_number<int>(fields[2], "priority");
+    job.duration = parse_number<Tick>(fields[3], "duration");
+    job.timeout = parse_number<Tick>(fields[4], "timeout");
+    if (fields[5] == "1" || fields[5] == "true")
+      job.hangs = true;
+    else if (fields[5] != "0" && fields[5] != "false")
+      throw std::invalid_argument("invalid hang: " + fields[5]);
     if (!fields[6].empty()) {
       for (const auto& dependency : split(fields[6], '|'))
-        job.dependencies.push_back(std::stoi(dependency));
+        job.dependencies.push_back(parse_number<int>(dependency, "dependency"));
     }
     jobs.push_back(job);
   }

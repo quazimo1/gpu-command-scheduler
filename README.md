@@ -74,6 +74,7 @@ id,context,priority,duration,timeout,hang,dependencies
 ```
 
 Durations and timeouts use abstract ticks. Priorities are positive integers; larger values receive precedence under strict priority and more consecutive service under weighted round robin.
+The loader requires the shown header, whole-number fields, and `true`/`false` or `1`/`0` for `hang`; malformed values are rejected.
 
 ## Design invariants
 
