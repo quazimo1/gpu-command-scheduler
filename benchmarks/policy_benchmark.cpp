@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
-#include <map>
-#include <numeric>
 #include <unordered_map>
 #include <vector>
 
@@ -35,53 +33,29 @@ std::vector<Job> make_workload() {
   return jobs;
 }
 
-struct WaitStats {
-  double low_priority_mean{};
-  Tick low_priority_max{};
-  double worst_context_mean{};
-};
-
-WaitStats calculate_wait_stats(const std::vector<Event>& events) {
+Tick max_low_priority_wait(const std::vector<Event>& events) {
   std::unordered_map<int, Tick> ready_at;
-  std::map<int, std::vector<Tick>> waits_by_context;
+  Tick maximum = 0;
   for (const auto& event : events) {
     if (event.type == "runnable") {
       ready_at[event.job] = event.time;
-    } else if (event.type == "dispatched") {
-      waits_by_context[event.context].push_back(event.time - ready_at.at(event.job));
+    } else if (event.type == "dispatched" && event.context >= 6) {
+      maximum = std::max(maximum, event.time - ready_at.at(event.job));
     }
   }
-
-  std::vector<Tick> low_priority_waits;
-  double worst_context_mean = 0.0;
-  for (const auto& [context, waits] : waits_by_context) {
-    const Tick total = std::accumulate(waits.begin(), waits.end(), Tick{0});
-    const double mean = static_cast<double>(total) / waits.size();
-    worst_context_mean = std::max(worst_context_mean, mean);
-    if (context >= 6)
-      low_priority_waits.insert(low_priority_waits.end(), waits.begin(), waits.end());
-  }
-
-  const Tick low_total =
-      std::accumulate(low_priority_waits.begin(), low_priority_waits.end(), Tick{0});
-  return {static_cast<double>(low_total) / low_priority_waits.size(),
-          *std::max_element(low_priority_waits.begin(), low_priority_waits.end()),
-          worst_context_mean};
+  return maximum;
 }
 
 }  // namespace
 
 int main() {
   const auto jobs = make_workload();
-  std::cout << "policy,jobs,elapsed_ticks,mean_wait,p95_wait,"
-               "low_priority_mean_wait,low_priority_max_wait,worst_context_mean_wait\n";
+  std::cout << "policy,jobs,elapsed_ticks,mean_wait,p95_wait,low_priority_max_wait\n";
   for (Policy policy : {Policy::fifo, Policy::priority, Policy::weighted_round_robin}) {
     const auto result = gpu_scheduler::Simulator(policy).run(jobs);
-    const auto stats = calculate_wait_stats(result.events);
     std::cout << gpu_scheduler::policy_name(policy) << ',' << jobs.size() << ','
               << result.elapsed << ',' << std::fixed << std::setprecision(2)
               << result.mean_queue_wait << ',' << result.p95_queue_wait << ','
-              << stats.low_priority_mean << ',' << stats.low_priority_max << ','
-              << stats.worst_context_mean << '\n';
+              << max_low_priority_wait(result.events) << '\n';
   }
 }

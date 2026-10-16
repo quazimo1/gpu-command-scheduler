@@ -28,13 +28,21 @@ void expect(bool condition, const std::string& message) {
   if (!condition) throw std::runtime_error(message);
 }
 
-void fifo_preserves_submission_order() {
+void fifo_orders_by_runnable_time() {
   const std::vector<Job> jobs{{1, 0, 1, 2, 10, false, {}},
                               {2, 1, 3, 1, 10, false, {}},
                               {3, 0, 2, 1, 10, false, {}}};
   const auto result = Simulator(Policy::fifo).run(jobs);
   expect(jobs_for(result.events, "dispatched") == std::vector<int>({1, 2, 3}),
-         "FIFO dispatch order");
+         "FIFO tie-breaks by submission order");
+
+  const std::vector<Job> delayed_jobs{{1, 0, 1, 1, 10, false, {}},
+                                      {2, 1, 1, 1, 10, false, {}},
+                                      {3, 0, 1, 1, 10, false, {1}},
+                                      {4, 1, 1, 1, 10, false, {}}};
+  const auto delayed_result = Simulator(Policy::fifo).run(delayed_jobs);
+  expect(jobs_for(delayed_result.events, "dispatched") == std::vector<int>({1, 2, 4, 3}),
+         "FIFO must preserve the order jobs became runnable");
 }
 
 void dependencies_block_until_completion() {
@@ -137,7 +145,7 @@ void deterministic_stress_reaches_a_terminal_state() {
 
 int main() {
   try {
-    fifo_preserves_submission_order();
+    fifo_orders_by_runnable_time();
     dependencies_block_until_completion();
     priority_selects_highest_first();
     weighted_round_robin_services_contexts();

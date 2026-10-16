@@ -4,7 +4,6 @@
 #include <charconv>
 #include <fstream>
 #include <map>
-#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <system_error>
@@ -43,19 +42,17 @@ T parse_number(const std::string& text, const char* field) {
 }
 
 void validate(const std::vector<Job>& jobs) {
-  std::set<int> ids;
+  std::unordered_map<int, const Job*> by_id;
   for (const auto& job : jobs) {
     if (job.id <= 0 || job.context < 0 || job.priority <= 0 ||
         job.duration == 0 || job.timeout == 0) {
       throw std::invalid_argument("job fields must be positive (context may be zero)");
     }
-    if (!ids.insert(job.id).second) {
+    if (!by_id.emplace(job.id, &job).second) {
       throw std::invalid_argument("duplicate job id: " + std::to_string(job.id));
     }
   }
 
-  std::unordered_map<int, const Job*> by_id;
-  for (const auto& job : jobs) by_id[job.id] = &job;
   for (const auto& job : jobs) {
     for (int dependency : job.dependencies) {
       if (!by_id.count(dependency)) {
@@ -130,7 +127,9 @@ RunResult Simulator::run(const std::vector<Job>& jobs) {
     if (ready.empty()) return nullptr;
 
     if (policy_ == Policy::fifo) {
-      return *std::min_element(ready.begin(), ready.end(), [](auto* a, auto* b) {
+      return *std::min_element(ready.begin(), ready.end(), [&](auto* a, auto* b) {
+        if (ready_at.at(a->job.id) != ready_at.at(b->job.id))
+          return ready_at.at(a->job.id) < ready_at.at(b->job.id);
         return a->order < b->order;
       });
     }

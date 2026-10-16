@@ -18,7 +18,7 @@ Implemented behavior:
 
 - multiple client contexts and ordered job submission;
 - fence-like dependencies with cycle and invalid-reference rejection;
-- FIFO, strict-priority, and weighted round-robin policies;
+- FIFO by runnable time, strict-priority, and weighted round-robin policies;
 - deterministic execution time and queue-wait metrics;
 - timeout/hang injection, engine reset, and dependent-job cancellation;
 - versionable CSV workloads and event traces;
@@ -54,7 +54,7 @@ The benchmark runs 400 deterministic jobs across eight contexts and four priorit
 ./build/Release/policy-benchmark.exe
 ```
 
-It reports overall mean/p95 queue wait together with the mean and maximum wait for the two lowest-priority contexts. Values are abstract ticks used to compare policies within this model; they are not hardware timings or claims about a commercial GPU.
+It reports overall mean/p95 queue wait and the maximum wait for the two lowest-priority contexts. Values are abstract ticks used to compare policies within this model; they are not hardware timings or claims about a commercial GPU.
 
 ### Recorded results
 
